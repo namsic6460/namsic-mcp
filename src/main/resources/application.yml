@@ -1,0 +1,16 @@
+spring:
+  config:
+    import: vault://
+  cloud:
+    vault:
+      enabled: true
+      fail-fast: true
+      kv:
+        enabled: true
+        backend: kv
+        default-context: mcp
+        profile-separator: /
+      uri: https://vault.namsic.be
+      userpass:
+        username: ${VAULT_USERNAME}
+        password: ${VAULT_PASSWORD}

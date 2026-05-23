@@ -1,0 +1,1 @@
+org.springframework.boot.EnvironmentPostProcessor=lkd.namsic.mcp.config.VaultConfig
