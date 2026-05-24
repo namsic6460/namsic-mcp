@@ -26,8 +26,8 @@ repositories {
 }
 
 ext {
-    set('springAiVersion', "2.0.0-M4")
-    set('springCloudVersion', "2025.1.0")
+    set('springAiVersion', "2.0.0-M7")
+    set('springCloudVersion', "2025.1.1")
     set('playwrightVersion', "1.58.0")
 }
 
@@ -35,6 +35,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.ai:spring-ai-starter-mcp-server-webmvc'
+    // Spring AI 2.0.0-M7 starter POM은 이 모듈을 optional로 두어 transitive로 안 끌어옴.
+    // McpServerStdioDisabledCondition 등 공통 autoconfig 클래스가 필요해 직접 선언.
+    implementation 'org.springframework.ai:spring-ai-autoconfigure-mcp-server-common'
     implementation 'org.springframework.cloud:spring-cloud-starter-vault-config'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
