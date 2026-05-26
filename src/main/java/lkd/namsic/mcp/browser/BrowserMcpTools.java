@@ -1,6 +1,7 @@
 package lkd.namsic.mcp.browser;
 
 import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.FileChooser;
 import com.microsoft.playwright.Keyboard;
 import com.microsoft.playwright.Mouse;
 import com.microsoft.playwright.Page;
@@ -18,12 +19,16 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
@@ -536,6 +541,84 @@ public class BrowserMcpTools {
         }
     }
 
+    // ===== File chooser =====
+
+    @Tool(name = "browser_expect_file_chooser", description = "Arm the next file chooser dialog to auto-respond with the given files. "
+        + "The picker must be triggered AFTER this call by another tool (e.g. browser_click on the upload button). "
+        + "filePaths is a newline-separated list of absolute host paths; an empty string sets an empty selection (cancel-like). "
+        + "The handler self-removes when it fires or when timeoutMs elapses (default 30000). "
+        + "Calling this twice replaces the prior armed handler (the previous one is silently dropped). "
+        + "The handler persists across navigations until it fires or times out. "
+        + "If the underlying input is single-file but multiple paths are provided, the call records an error retrievable "
+        + "via browser_get_page_errors. "
+        + "Because Playwright Java pumps events on the same thread that issues calls, the handler does NOT fire on its own — "
+        + "a subsequent tool call (browser_click etc.) is required to drive the message pump and deliver the chooser event.")
+    public String browserExpectFileChooser(
+        @ToolParam(description = SESSION_PARAM_DESC) final String sessionId,
+        @ToolParam(description = "Newline-separated absolute host paths. Empty string = empty selection.") final String filePaths,
+        @ToolParam(description = "Handler timeout in ms. Default: 30000") final Integer timeoutMs
+    ) {
+        log.info("MCP tool invoked: browser_expect_file_chooser sessionId={}", sessionId);
+        final BrowserSession s = this.requireSession(sessionId);
+        final int timeout = timeoutMs != null && timeoutMs > 0 ? timeoutMs : 30_000;
+
+        final Path[] paths;
+        try {
+            paths = parseAndValidatePaths(filePaths);
+        } catch (final IllegalArgumentException ex) {
+            return "Error: " + ex.getMessage();
+        }
+
+        try {
+            final boolean replaced = s.submit(() -> {
+                final Consumer<FileChooser> previous = s.armedFileChooser;
+                final boolean replacedPrev = previous != null;
+                if (replacedPrev) {
+                    try {
+                        s.page.offFileChooser(previous);
+                    } catch (final RuntimeException ex) {
+                        log.warn("Failed to remove previous file chooser handler", ex);
+                    }
+                    s.armedFileChooser = null;
+                }
+
+                final long deadline = System.currentTimeMillis() + timeout;
+                @SuppressWarnings("unchecked")
+                final Consumer<FileChooser>[] holder = new Consumer[1];
+                holder[0] = chooser -> {
+                    try {
+                        s.page.offFileChooser(holder[0]);
+                    } catch (final RuntimeException ex) {
+                        log.warn("Failed to self-remove file chooser handler", ex);
+                    }
+                    s.armedFileChooser = null;
+                    if (System.currentTimeMillis() > deadline) {
+                        s.appendError("file chooser handler expired before trigger; skipping setFiles");
+                        return;
+                    }
+                    try {
+                        if (!chooser.isMultiple() && paths.length > 1) {
+                            s.appendError("file chooser expects single file but " + paths.length + " provided");
+                            return;
+                        }
+                        chooser.setFiles(paths);
+                    } catch (final RuntimeException ex) {
+                        s.appendError("file chooser setFiles failed: " + ex.getMessage());
+                    }
+                };
+                s.page.onFileChooser(holder[0]);
+                s.armedFileChooser = holder[0];
+                return replacedPrev;
+            });
+            final String prefix = replaced ? "Previous handler replaced. " : "";
+            return prefix + "File chooser armed for " + paths.length + " files; expires in " + timeout
+                + "ms. Trigger the picker with a subsequent browser_click or similar call.";
+        } catch (final RuntimeException ex) {
+            log.warn("expect file chooser failed", ex);
+            return "Error arming file chooser: " + ex.getMessage();
+        }
+    }
+
     // ===== Diagnostics =====
 
     @Tool(name = "browser_get_console_logs", description = "Return console logs accumulated since session start (capped at 1000 most recent). "
@@ -615,6 +698,29 @@ public class BrowserMcpTools {
             case "commit" -> WaitUntilState.COMMIT;
             default -> WaitUntilState.NETWORKIDLE;
         };
+    }
+
+    private static final Pattern NEWLINE_SPLIT = Pattern.compile("\\R");
+
+    private static Path[] parseAndValidatePaths(final String filePaths) {
+        if (filePaths == null || filePaths.isEmpty()) {
+            return new Path[0];
+        }
+        final String[] raw = NEWLINE_SPLIT.split(filePaths);
+        final List<Path> result = new ArrayList<>(raw.length);
+        for (final String entry : raw) {
+            final String trimmed = entry.trim();
+            if (trimmed.isEmpty()) continue;
+            final Path p = Paths.get(trimmed).toAbsolutePath().normalize();
+            if (!Files.exists(p)) {
+                throw new IllegalArgumentException("file not found: " + p);
+            }
+            if (!Files.isRegularFile(p)) {
+                throw new IllegalArgumentException("not a regular file: " + p);
+            }
+            result.add(p);
+        }
+        return result.toArray(new Path[0]);
     }
 
     private static MouseButton parseButton(final String s) {

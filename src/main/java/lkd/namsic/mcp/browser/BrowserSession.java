@@ -2,6 +2,7 @@ package lkd.namsic.mcp.browser;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.FileChooser;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 @Slf4j
 class BrowserSession {
@@ -33,6 +35,7 @@ class BrowserSession {
     final List<String> pageErrors = Collections.synchronizedList(new ArrayList<>());
     final AtomicInteger seq = new AtomicInteger();
     final Path hostScreenshotDir;
+    volatile Consumer<FileChooser> armedFileChooser;
 
     BrowserSession(final String sessionId, final Path hostScreenshotDir) {
         this.hostScreenshotDir = hostScreenshotDir;
