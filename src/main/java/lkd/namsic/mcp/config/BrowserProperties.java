@@ -38,10 +38,10 @@ public record BrowserProperties(
             headless = false;
         }
         if (viewportWidth == null || viewportWidth <= 0) {
-            viewportWidth = 1920;
+            viewportWidth = 1280;
         }
         if (viewportHeight == null || viewportHeight <= 0) {
-            viewportHeight = 1080;
+            viewportHeight = 720;
         }
         if (deviceScaleFactor == null || deviceScaleFactor <= 0) {
             deviceScaleFactor = 1.0;
