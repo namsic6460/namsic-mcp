@@ -440,8 +440,28 @@ public class AndroidDeviceService {
 
     // ===== 네트워크 제어 =====
 
+    /**
+     * 무선(TCP/IP·mDNS) adb 연결인지 판별한다. 무선 연결에서 wifi를 끄면 adb 제어 채널 자체가
+     * 끊겨 기기를 되살릴 수 없으므로 {@link #setOffline}을 거부하는 데 쓴다.
+     * 무선 serial 형태: "192.168.0.10:5555"(TCP/IP) 또는
+     * "adb-XXXX._adb-tls-connect._tcp"(Android 11+ 무선 디버깅). USB serial엔 콜론이 없고,
+     * 에뮬레이터는 콘솔 포트("emulator-5554")라 무선이 아니다.
+     */
+    static boolean isWirelessSerial(final String serial) {
+        if (serial == null || serial.startsWith("emulator-")) {
+            return false;
+        }
+        return serial.contains(":") || serial.contains("_adb-tls-");
+    }
+
     /** wifi와 모바일 데이터를 함께 토글한다 (svc — 실기기/에뮬레이터 공통). */
     public void setOffline(final String serial, final boolean offline) {
+        if (isWirelessSerial(serial)) {
+            throw new IllegalStateException("android_set_offline is disabled over a wireless adb connection ("
+                + serial + "): disabling wifi would sever the adb control channel and the device could not be "
+                + "recovered without physical access. Connect the device over USB to test offline behavior, "
+                + "or use android_set_http_proxy / a server-side network fault to simulate connectivity loss.");
+        }
         final String op = offline ? "disable" : "enable";
         this.runChecked(serial, List.of("shell", "svc", "wifi", op),
             this.properties.commandTimeout(), "svc wifi " + op);

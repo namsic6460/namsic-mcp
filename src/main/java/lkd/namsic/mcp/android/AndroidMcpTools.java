@@ -473,9 +473,11 @@ public class AndroidMcpTools {
     // ===== 네트워크 제어 =====
 
     @McpTool(name = "android_set_offline", description = "Toggle device connectivity by enabling/disabling BOTH "
-        + "wifi and mobile data (svc wifi/data). Works on physical devices and emulators. Use to test offline "
-        + "guards, heartbeat loss, and reconnect flows. Pass offline=false to restore connectivity. "
-        + "Browser-side equivalent: browser_set_offline.")
+        + "wifi and mobile data (svc wifi/data). Works on USB-connected physical devices and emulators. "
+        + "NOT available over a wireless adb connection (serial like '192.168.0.10:5555' or an '_adb-tls-connect' "
+        + "mDNS name) — disabling wifi would sever the adb channel and brick the session; the call is rejected. "
+        + "Use to test offline guards, heartbeat loss, and reconnect flows. Pass offline=false to restore "
+        + "connectivity. Browser-side equivalent: browser_set_offline.")
     public String androidSetOffline(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "true = go offline (wifi+data off), false = back online") final Boolean offline
