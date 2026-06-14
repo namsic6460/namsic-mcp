@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * adb 도메인 로직 전부를 캡슐화한다 (AndroidMcpTools는 얇은 어댑터).
@@ -47,6 +49,12 @@ public class AndroidDeviceService {
 
     private final AdbCommandRunner adb;
     private final AndroidProperties properties;
+
+    /**
+     * {@code exec-out screencap -p} stdout이 디코드 가능한 PNG를 못 내놓는 기기(adb.exe stdout
+     * 텍스트모드 변환·일부 OEM의 stdout 선행 출력 등)를 기억해 두 번째부터는 곧바로 파일+pull로 캡처한다.
+     */
+    private final Set<String> pullOnlyScreencap = ConcurrentHashMap.newKeySet();
 
     public AndroidDeviceService(final AdbCommandRunner adb, final AndroidProperties properties) {
         this.adb = adb;
@@ -266,25 +274,44 @@ public class AndroidDeviceService {
 
     // ===== 스크린샷 =====
 
+    /** screencap PNG를 받아둘 기기 측 임시 경로 (stdout이 못 미더운 기기의 pull 폴백용). */
+    private static final String SHOT_DEVICE_PATH = "/sdcard/namsic_shot.png";
+    /** PNG 시그니처 길이 — 정상 PNG라면 선두가 "89 50 4e 47 0d 0a 1a 0a". */
+    private static final int PNG_SIGNATURE_LENGTH = 8;
+
     /**
      * {@code exec-out screencap -p}로 raw PNG를 받아 저장한다.
      * jpeg=true면 다운스케일(최대 변 screenshotMaxDimension) + JPEG q80으로 변환해
      * API 비전 한계(~1.15MP) 초과 낭비를 막는다.
+     * <p>일부 기기는 stdout으로 받은 바이트가 디코드 가능한 PNG가 아니다(시그니처 손상 등). 그 경우
+     * {@link #recordScreen}와 동일하게 파일+{@code adb pull}(바이너리 안전)로 재캡처하고, 해당 기기는
+     * 이후 곧바로 pull 경로를 타도록 기억한다.
      */
     public ScreenshotResult screenshot(final String serial, final Path dir, final String filename,
         final boolean jpeg) {
-        final AdbBinaryResult result = this.adb.runBinary(serial, List.of("exec-out", "screencap", "-p"),
-            this.properties.commandTimeout());
-        if (result.isFail() || result.stdout().length == 0) {
-            throw new IllegalStateException("screencap failed: "
-                + (result.timedOut() ? "timed out" : result.stderr()));
-        }
-        final byte[] png = result.stdout();
-        try {
-            final BufferedImage source = ImageIO.read(new ByteArrayInputStream(png));
+        byte[] png;
+        BufferedImage source;
+        if (this.pullOnlyScreencap.contains(serial)) {
+            png = this.screencapViaPull(serial);
+            source = tryDecodePng(png);
+        } else {
+            png = this.screencapViaStdout(serial);
+            source = tryDecodePng(png);
             if (source == null) {
-                throw new IllegalStateException("screencap returned invalid PNG data (" + png.length + " bytes)");
+                log.warn("screencap stdout was not a decodable PNG on {} ({} bytes, header=[{}]); "
+                        + "switching this device to the adb pull capture path",
+                    serial, png.length, hexPrefix(png));
+                this.pullOnlyScreencap.add(serial);
+                png = this.screencapViaPull(serial);
+                source = tryDecodePng(png);
             }
+        }
+        if (source == null) {
+            throw new IllegalStateException("screencap returned undecodable image data (" + png.length
+                + " bytes, header=[" + hexPrefix(png) + "]). If the foreground window is FLAG_SECURE "
+                + "(DRM/banking/password manager), it cannot be captured.");
+        }
+        try {
             if (!jpeg) {
                 Files.write(dir.resolve(filename), png);
                 return new ScreenshotResult(png, filename, "image/png",
@@ -298,6 +325,73 @@ public class AndroidDeviceService {
         } catch (final IOException ex) {
             throw new IllegalStateException("Failed to process screenshot: " + ex.getMessage(), ex);
         }
+    }
+
+    /** 빠른 경로: {@code exec-out screencap -p} stdout 원시 바이트. 프로세스 자체가 실패하면 throw. */
+    private byte[] screencapViaStdout(final String serial) {
+        final AdbBinaryResult result = this.adb.runBinary(serial, List.of("exec-out", "screencap", "-p"),
+            this.properties.commandTimeout());
+        if (result.isFail() || result.stdout().length == 0) {
+            throw new IllegalStateException("screencap failed: "
+                + (result.timedOut() ? "timed out" : result.stderr()));
+        }
+        return result.stdout();
+    }
+
+    /**
+     * 폴백 경로: 기기 파일로 캡처한 뒤 {@code adb pull}로 가져온다. pull은 sync 프로토콜로 파일을
+     * 직접 쓰므로 stdout 텍스트모드 변환에 영향받지 않는다. 기기·호스트 임시 파일은 항상 정리한다.
+     */
+    private byte[] screencapViaPull(final String serial) {
+        this.runChecked(serial, List.of("shell", "screencap", "-p", SHOT_DEVICE_PATH),
+            this.properties.commandTimeout(), "screencap to file");
+        final Path tmp;
+        try {
+            tmp = Files.createTempFile("namsic_shot", ".png");
+        } catch (final IOException ex) {
+            throw new IllegalStateException("could not create temp file for screencap pull: " + ex.getMessage(), ex);
+        }
+        try {
+            final ProcessResult pull = this.adb.runText(serial,
+                List.of("pull", SHOT_DEVICE_PATH, tmp.toString()), this.properties.commandTimeout());
+            if (pull.timedOut() || pull.exitCode() != 0) {
+                throw new IllegalStateException("adb pull of screencap failed: "
+                    + (pull.timedOut() ? "timed out" : pull.stdout()));
+            }
+            return Files.readAllBytes(tmp);
+        } catch (final IOException ex) {
+            throw new IllegalStateException("failed to read pulled screencap: " + ex.getMessage(), ex);
+        } finally {
+            try {
+                Files.deleteIfExists(tmp);
+            } catch (final IOException ignored) {
+                // 호스트 임시 파일 정리 실패는 캡처 결과에 영향이 없다
+            }
+            this.adb.runText(serial, List.of("shell", "rm", "-f", SHOT_DEVICE_PATH),
+                this.properties.commandTimeout());
+        }
+    }
+
+    /** PNG 디코드 시도. 디코드 불가(시그니처 미인식·본문 손상)면 IOException도 삼키고 null 반환. */
+    private static BufferedImage tryDecodePng(final byte[] png) {
+        try {
+            return ImageIO.read(new ByteArrayInputStream(png));
+        } catch (final IOException ex) {
+            return null;
+        }
+    }
+
+    /** 진단용: 선두 바이트를 hex로. PNG라면 "89 50 4e 47 0d 0a 1a 0a"로 시작해야 한다. */
+    private static String hexPrefix(final byte[] data) {
+        final int len = Math.min(PNG_SIGNATURE_LENGTH, data.length);
+        final StringBuilder sb = new StringBuilder(len * 3);
+        for (int i = 0; i < len; i++) {
+            if (i > 0) {
+                sb.append(' ');
+            }
+            sb.append(String.format("%02x", data[i] & 0xff));
+        }
+        return sb.toString();
     }
 
     /** 최대 변이 maxDimension을 넘으면 비율 유지 축소. 항상 TYPE_INT_RGB로 반환(JPEG 호환). */
