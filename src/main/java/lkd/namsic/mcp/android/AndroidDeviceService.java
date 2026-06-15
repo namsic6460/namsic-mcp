@@ -28,6 +28,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * adb 도메인 로직 전부를 캡슐화한다 (AndroidMcpTools는 얇은 어댑터).
@@ -270,6 +272,66 @@ public class AndroidDeviceService {
         }
         final String upper = trimmed.toUpperCase(Locale.ROOT);
         return upper.startsWith("KEYCODE_") ? upper : "KEYCODE_" + upper;
+    }
+
+    /** 화면 전원을 직접 켜/끄는 키코드 (이름 또는 숫자 — normalizeKeycode 출력 형태 둘 다 수용). */
+    private static final Set<String> POWER_KEYCODES = Set.of(
+        "KEYCODE_POWER", "KEYCODE_WAKEUP", "KEYCODE_SLEEP", "KEYCODE_SOFT_SLEEP",
+        "26", "223", "224", "276");
+
+    /** 화면 전원을 직접 제어하는 키인지 — 이 키들은 조작 전 자동 화면 켜기 가드를 건너뛴다. */
+    static boolean isPowerKey(final String keycode) {
+        return keycode != null && POWER_KEYCODES.contains(keycode.toUpperCase(Locale.ROOT));
+    }
+
+    // ===== 화면 전원 =====
+
+    private static final Pattern DISPLAY_POWER_STATE = Pattern.compile("Display Power: state=(\\w+)");
+    private static final Pattern WAKEFULNESS = Pattern.compile("mWakefulness=(\\w+)");
+    private static final Pattern LEGACY_SCREEN_ON = Pattern.compile("mScreenOn=(true|false)");
+    /** WAKEUP 후 디스플레이가 입력을 받을 준비가 될 때까지의 안정화 대기. */
+    private static final long SCREEN_WAKE_SETTLE_MS = 500L;
+
+    /**
+     * 디스플레이가 켜져 있는지 {@code dumpsys power}로 판정한다. OEM/버전마다 표기가 달라
+     * 세 신호를 우선순위대로 본다: "Display Power: state=" → "mWakefulness=" → 구버전 "mScreenOn=".
+     * 어느 것도 못 읽으면 켜진 것으로 간주한다 — 불필요한 WAKEUP으로 멀쩡한 화면을 건드리지 않기 위함.
+     */
+    public boolean isScreenOn(final String serial) {
+        final ProcessResult result = this.adb.runText(serial,
+            List.of("shell", "dumpsys", "power"), this.properties.commandTimeout());
+        if (!result.success()) {
+            return true;
+        }
+        final String out = result.stdout();
+        final Matcher display = DISPLAY_POWER_STATE.matcher(out);
+        if (display.find()) {
+            // OFF / DOZE / DOZE_SUSPEND 등은 꺼진 것으로 본다. ON·VR만 켜짐으로 인정.
+            final String state = display.group(1);
+            return "ON".equals(state) || "VR".equals(state);
+        }
+        final Matcher wake = WAKEFULNESS.matcher(out);
+        if (wake.find()) {
+            return "Awake".equals(wake.group(1));
+        }
+        final Matcher legacy = LEGACY_SCREEN_ON.matcher(out);
+        if (legacy.find()) {
+            return Boolean.parseBoolean(legacy.group(1));
+        }
+        return true;
+    }
+
+    /**
+     * 화면이 꺼져 있으면 WAKEUP 키로 켜고 입력 가능 상태가 될 때까지 잠깐 기다린다.
+     * WAKEUP은 멱등하므로 이미 켜져 있을 때 호출돼도 무해하다 (그 경우 isScreenOn에서 바로 반환).
+     */
+    public void ensureScreenOn(final String serial) {
+        if (this.isScreenOn(serial)) {
+            return;
+        }
+        log.info("Screen is off on {} — sending WAKEUP before the requested action", serial);
+        this.pressKey(serial, "KEYCODE_WAKEUP");
+        sleepQuietly(SCREEN_WAKE_SETTLE_MS);
     }
 
     // ===== 스크린샷 =====

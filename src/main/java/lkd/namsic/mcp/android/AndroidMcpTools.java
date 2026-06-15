@@ -369,10 +369,13 @@ public class AndroidMcpTools {
         log.info("MCP tool invoked: android_press_key key={} sessionId={}", key, sessionId);
         final AndroidSession s = this.requireSession(sessionId);
         final String keycode = AndroidDeviceService.normalizeKeycode(key);
+        // 전원/슬립/웨이크 키는 화면 전원을 직접 제어하므로 조작 전 자동 화면 켜기 가드를 건너뛴다
+        // (POWER로 화면을 끄려는 호출이 WAKEUP→POWER로 깜빡이다 꺼지는 모순을 막는다).
+        final boolean powerKey = AndroidDeviceService.isPowerKey(keycode);
         try {
             return this.actAndMaybeCapture(s, screenshotAfterMs,
                 "Pressed " + keycode,
-                () -> this.deviceService.pressKey(s.serial, keycode));
+                () -> this.deviceService.pressKey(s.serial, keycode), !powerKey);
         } catch (final RuntimeException ex) {
             return errText("Error pressing key: " + ex.getMessage());
         }
@@ -774,19 +777,33 @@ public class AndroidMcpTools {
         });
     }
 
+    private CallToolResult actAndMaybeCapture(final AndroidSession s, final Integer screenshotAfterMs,
+        final String successText, final Runnable deviceAction) {
+        return this.actAndMaybeCapture(s, screenshotAfterMs, successText, deviceAction, true);
+    }
+
     /**
      * 액션을 세션 스레드에서 실행하고, screenshotAfterMs가 지정되면 같은 task 안에서
      * 대기 후 캡처까지 수행한다 — 다른 도구 호출이 액션과 캡처 사이에 끼어들 수 없다.
+     * wakeScreenFirst=true면 액션 직전(같은 task 안)에 화면이 꺼져 있는지 확인하고 켜므로,
+     * 잠금/절전으로 화면이 꺼진 상태에서도 조작이 헛되지 않는다. 화면 전원을 직접 켜/끄는
+     * 전원 키 액션만 호출부에서 false를 넘겨 이 가드를 끈다.
      */
     private CallToolResult actAndMaybeCapture(final AndroidSession s, final Integer screenshotAfterMs,
-        final String successText, final Runnable deviceAction) {
+        final String successText, final Runnable deviceAction, final boolean wakeScreenFirst) {
         final String budgetError = screenshotBudgetError(screenshotAfterMs);
         if (budgetError != null) {
             return errText(budgetError);
         }
+        final Runnable guardedAction = () -> {
+            if (wakeScreenFirst) {
+                this.deviceService.ensureScreenOn(s.serial);
+            }
+            deviceAction.run();
+        };
         if (screenshotAfterMs == null) {
             s.submit(() -> {
-                deviceAction.run();
+                guardedAction.run();
                 return null;
             });
             return okText(successText);
@@ -794,7 +811,7 @@ public class AndroidMcpTools {
         final int waitMs = Math.max(0, screenshotAfterMs);
         final String filename = String.format("%04d.jpg", s.seq.incrementAndGet());
         final ScreenshotResult shot = s.submit(() -> {
-            deviceAction.run();
+            guardedAction.run();
             Thread.sleep(waitMs);
             return this.deviceService.screenshot(s.serial, s.hostScreenshotDir, filename, true);
         });
