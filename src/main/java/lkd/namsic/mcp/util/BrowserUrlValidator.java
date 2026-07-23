@@ -8,7 +8,7 @@ import java.util.Set;
  * 브라우저 MCP 도구의 URL 입력을 검증해 SSRF / 내부망 metadata 접근을 차단한다.
  *
  * <p>LLM은 신뢰할 수 없는 URL을 전달할 수 있으므로 스킴·호스트·포트 단에서 필터링한다.
- * dev server(기본 10000번대 포트)는 모두 허용하고, 클라우드 metadata 엔드포인트와
+ * 로컬 개발 서버 포트는 모두 허용하고, 클라우드 metadata 엔드포인트와
  * 대표 백엔드 서비스 포트만 차단해 실 사용성과 방어를 양립시킨다.
  */
 public final class BrowserUrlValidator {

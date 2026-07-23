@@ -1469,7 +1469,10 @@ public class BrowserMcpTools {
      */
     static long grantRouteDelay(final AtomicLong remaining, final int requested) {
         if (requested <= 0) return 0L;
-        final long before = remaining.getAndAdd(-requested);
+        // 0 미만으로 내려가지 않게 차감해야 한다 — 음수 잔량을 그대로 clamp의 max로 넘기면
+        // min(0) > max 가 되어 IllegalArgumentException 이 나고, 예산 소진 후 매칭되는
+        // 모든 요청의 route 핸들러가 터진다.
+        final long before = remaining.getAndUpdate(r -> Math.max(0L, r - requested));
         return Math.clamp(requested, 0L, before);
     }
 

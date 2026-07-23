@@ -729,7 +729,7 @@ public class AndroidMcpTools {
 
     @McpTool(name = "android_close_session", description = "Close the Android session: restores the device's "
         + "original keyboard (if ADBKeyboard was activated) and releases the device binding. The sessionId "
-        + "itself stays valid for browser_* and dev_server_* tools; call android_use_device again to resume "
+        + "itself stays valid for browser_* tools; call android_use_device again to resume "
         + "Android testing.")
     public String androidCloseSession(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId

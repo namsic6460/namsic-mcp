@@ -15,11 +15,9 @@ public class ProjectInitTool {
     private final ProjectSessionRegistry registry;
 
     @Tool(name = "project_init", description = "Initialize a project-scoped session. "
-        + "Returns a UUID sessionId that MUST be passed to every subsequent browser_*, dev_server_* "
-        + "and android_* tool call. "
+        + "Returns a UUID sessionId that MUST be passed to every subsequent browser_* and android_* tool call. "
         + "The projectName is used as the screenshot subdirectory name under the screenshot base dir. "
-        + "Calling project_init again with the same projectName is idempotent and returns the existing sessionId. "
-        + "Dev servers are registered independently under app.dev-servers (use dev_server_list to see them).")
+        + "Calling project_init again with the same projectName is idempotent and returns the existing sessionId.")
     public String projectInit(
         @ToolParam(description = "Project name used as the screenshot subdirectory name. "
             + "Characters outside [A-Za-z0-9._-] are replaced with '_'.") final String projectName
@@ -35,7 +33,6 @@ public class ProjectInitTool {
         return "sessionId: " + project.sessionId() + '\n'
             + "project: " + project.projectName() + '\n'
             + "screenshotDir: " + project.screenshotDir().toAbsolutePath() + "\n\n"
-            + "Pass this sessionId to every browser_*, dev_server_* and android_* tool call in this conversation. "
-            + "Call dev_server_list to see registered dev servers.";
+            + "Pass this sessionId to every browser_* and android_* tool call in this conversation.";
     }
 }

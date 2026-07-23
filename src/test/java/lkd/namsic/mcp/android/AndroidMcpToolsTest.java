@@ -214,7 +214,7 @@ class AndroidMcpToolsTest {
         String result = this.tools.androidCloseSession(project.sessionId());
         assertTrue(result.startsWith("Android session closed"), result);
         assertTrue(this.tools.getSessions().isEmpty());
-        // sessionId는 browser_*/dev_server_* 용으로 계속 유효해야 함
+        // sessionId는 browser_* 용으로 계속 유효해야 함
         assertDoesNotThrow(() -> this.registry.require(project.sessionId()));
     }
 
