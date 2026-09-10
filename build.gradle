@@ -28,7 +28,6 @@ repositories {
 ext {
     set('springAiVersion', "2.0.0-M7")
     set('springCloudVersion', "2025.1.1")
-    set('playwrightVersion', "1.58.0")
 }
 
 dependencies {
@@ -40,8 +39,6 @@ dependencies {
     implementation 'org.springframework.ai:spring-ai-autoconfigure-mcp-server-common'
     implementation 'org.springframework.cloud:spring-cloud-starter-vault-config'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-
-    implementation "com.microsoft.playwright:playwright:${playwrightVersion}"
 
     //noinspection AnnotationProcessorOnCompilePath
     compileOnly 'org.projectlombok:lombok:1.18.46'
@@ -69,4 +66,7 @@ dependencyManagement {
 tasks.named('test') {
     useJUnitPlatform()
     jvmArgs '-Xshare:off'
+    // ChromeUiaHostIntegrationTest는 실제 실행 중인 크롬이 필요해 기본 비활성이다.
+    // 실행: ./gradlew test -PchromeUiaIt=true --tests '*ChromeUiaHostIntegrationTest*'
+    systemProperty 'chrome.uia.it', findProperty('chromeUiaIt') ?: 'false'
 }

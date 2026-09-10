@@ -15,7 +15,7 @@ public class ProjectInitTool {
     private final ProjectSessionRegistry registry;
 
     @Tool(name = "project_init", description = "Initialize a project-scoped session. "
-        + "Returns a UUID sessionId that MUST be passed to every subsequent browser_* and android_* tool call. "
+        + "Returns a UUID sessionId that MUST be passed to every subsequent android_* and chrome_* tool call. "
         + "The projectName is used as the screenshot subdirectory name under the screenshot base dir. "
         + "Calling project_init again with the same projectName is idempotent and returns the existing sessionId.")
     public String projectInit(
@@ -33,6 +33,6 @@ public class ProjectInitTool {
         return "sessionId: " + project.sessionId() + '\n'
             + "project: " + project.projectName() + '\n'
             + "screenshotDir: " + project.screenshotDir().toAbsolutePath() + "\n\n"
-            + "Pass this sessionId to every browser_* and android_* tool call in this conversation.";
+            + "Pass this sessionId to every android_* and chrome_* tool call in this conversation.";
     }
 }

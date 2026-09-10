@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * 스크린샷 BufferedImage에서 좌표별 픽셀 색/영역 평균색을 추출한다.
- * browser_sample_pixels(viewport CSS 픽셀)와 android_sample_pixels(디바이스 픽셀)가 공유한다.
+ * android_sample_pixels(디바이스 픽셀)가 사용한다.
  */
 public final class PixelSampler {
 

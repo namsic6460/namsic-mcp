@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     같은 폴더의 .env 를 읽어 환경변수로 주입한 뒤 ./gradlew bootRun 으로 서버를 띄운다.
-    도커를 쓰지 않으므로 docker / adb / node(Playwright) 등은 전부 호스트(Windows)에
-    설치된 로컬 바이너리를 PATH 에서 그대로 사용한다. 네트워크·파일시스템도 로컬 그대로다.
+    도커를 쓰지 않으므로 adb 등은 전부 호스트(Windows)에 설치된 로컬 바이너리를
+    PATH 에서 그대로 사용한다. 네트워크·파일시스템도 로컬 그대로다.
 
 .PARAMETER EnvFile
     읽어들일 .env 경로. 기본값은 스크립트와 같은 폴더의 .env.

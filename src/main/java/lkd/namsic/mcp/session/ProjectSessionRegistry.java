@@ -1,6 +1,6 @@
 package lkd.namsic.mcp.session;
 
-import lkd.namsic.mcp.config.BrowserProperties;
+import lkd.namsic.mcp.config.SessionProperties;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -19,8 +19,8 @@ public class ProjectSessionRegistry {
     private final Map<String, Project> byId = new ConcurrentHashMap<>();
     private final Map<String, String> byName = new ConcurrentHashMap<>();
 
-    public ProjectSessionRegistry(BrowserProperties browserProperties) {
-        this.screenshotBaseDir = browserProperties.screenshotBaseDir();
+    public ProjectSessionRegistry(SessionProperties sessionProperties) {
+        this.screenshotBaseDir = sessionProperties.screenshotBaseDir();
     }
 
     public record Project(String sessionId, String projectName, Path screenshotDir, Instant createdAt) {

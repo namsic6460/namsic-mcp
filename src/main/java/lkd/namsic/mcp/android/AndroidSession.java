@@ -16,7 +16,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 세션별 안드로이드 기기 상태 홀더 (BrowserSession 대응).
+ * 세션별 안드로이드 기기 상태 홀더.
  * 모든 adb 호출을 세션당 단일 데몬 스레드로 직렬화해 dump↔tap 경합을 차단한다.
  */
 @Slf4j

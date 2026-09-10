@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 네이티브 안드로이드 앱 테스트 MCP 도구 (순수 ADB 직접 제어).
- * BrowserMcpTools와 동일하게 @McpTool 어노테이션 스캐너로 자동 등록된다 —
+ * @McpTool 어노테이션 스캐너로 자동 등록된다 (CallToolResult 반환을 위해 @Tool 경로를 쓰지 않음) —
  * McpToolConfig.toolObjects에 넣으면 이중 등록 충돌이 나므로 절대 추가하지 말 것.
  */
 @Slf4j
@@ -118,8 +118,7 @@ public class AndroidMcpTools {
         + "one ready device is connected. Records the device's current keyboard (IME) so it can be restored "
         + "on android_close_session. Must be called before any interaction tool. "
         + "Each device's state (UI-dump cache, IME) is tracked separately, so you can switch back and forth "
-        + "between two devices (e.g. two test accounts on two emulators) without losing context — the "
-        + "browser-side analogue of browser_switch_tab.")
+        + "between two devices (e.g. two test accounts on two emulators) without losing context.")
     public String androidUseDevice(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Device serial from android_list_devices (e.g. 'emulator-5554'). "
@@ -480,7 +479,7 @@ public class AndroidMcpTools {
         + "NOT available over a wireless adb connection (serial like '192.168.0.10:5555' or an '_adb-tls-connect' "
         + "mDNS name) — disabling wifi would sever the adb channel and brick the session; the call is rejected. "
         + "Use to test offline guards, heartbeat loss, and reconnect flows. Pass offline=false to restore "
-        + "connectivity. Browser-side equivalent: browser_set_offline.")
+        + "connectivity.")
     public String androidSetOffline(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "true = go offline (wifi+data off), false = back online") final Boolean offline
@@ -506,7 +505,7 @@ public class AndroidMcpTools {
         + "(serial must start with 'emulator-'). speed: 'full' (reset), 'gsm', 'edge', '3g', 'lte', or "
         + "'up:down' in kbps (e.g. '100:100'). delay: 'none' (reset), 'gprs', 'edge', or 'min:max' in ms "
         + "(e.g. '500:1000'). Use to observe loading spinners and transient states that vanish at full speed. "
-        + "Reset with speed='full' delay='none'. Browser-side equivalent: browser_set_network_conditions.")
+        + "Reset with speed='full' delay='none'.")
     public String androidSetNetworkConditions(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Network speed: 'full', 'gsm', 'edge', '3g', 'lte', or 'up:down' kbps",
@@ -537,8 +536,8 @@ public class AndroidMcpTools {
         + "the caller's responsibility. Omit hostPort (or pass ':0') to clear. From an emulator the host "
         + "machine is reachable as 10.0.2.2. CAVEATS: apps using their own HTTP stack can ignore the global "
         + "proxy, and HTTPS interception additionally requires the proxy CA to be trusted on the device "
-        + "(user-added CAs are distrusted by default since API 24). There is no pure-ADB equivalent of "
-        + "browser_route — request mocking on Android always needs an external proxy.")
+        + "(user-added CAs are distrusted by default since API 24). Request mocking on Android always "
+        + "needs an external proxy — there is no pure-ADB equivalent.")
     public String androidSetHttpProxy(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Proxy as 'host:port' (e.g. '10.0.2.2:8888'). Omit or ':0' to clear.",
@@ -566,8 +565,7 @@ public class AndroidMcpTools {
     @McpTool(name = "android_push_file", description = "Push a host file onto the device (adb push) — e.g. a "
         + "test image/audio file for upload and file-picker scenarios. scanMedia=true (default) broadcasts "
         + "MEDIA_SCANNER_SCAN_FILE afterwards so gallery/picker apps see the file immediately. "
-        + "Browser-side equivalent: browser_set_input_files (the browser injects directly; on Android the file "
-        + "must be on-device first, then picked through the app's own UI).")
+        + "For upload scenarios the file must be on-device first, then picked through the app's own UI.")
     public String androidPushFile(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Absolute host path of the file to push") final String localPath,
@@ -606,8 +604,7 @@ public class AndroidMcpTools {
         + "input: f0 immediately, then `count-1` more frames ≈`intervalMs` apart, all returned inline plus "
         + "saved file paths. Use to observe ongoing animations (spinners, toasts fading, transitions) that a "
         + "single screenshot misses. Each screencap itself takes several hundred ms on-device, so actual frame "
-        + "spacing drifts beyond nominal — treat intervalMs as a lower bound. "
-        + "Browser-side equivalent: browser_capture_timeline.")
+        + "spacing drifts beyond nominal — treat intervalMs as a lower bound.")
     public CallToolResult androidCaptureTimeline(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Capture interval in ms. Default: 1000", required = false) final Integer intervalMs,
@@ -657,8 +654,7 @@ public class AndroidMcpTools {
         + "(screenrecord), pull it to the host, and return the saved file path. durationMs max 180000 "
         + "(screenrecord's own limit). NOTE: the MP4 cannot be analyzed inline by the model — prefer "
         + "android_capture_timeline for frames the model can see; use this when a human will review the video "
-        + "or as archival evidence. Recording occupies the session for the whole duration. "
-        + "Browser-side equivalent: browser_record_video.")
+        + "or as archival evidence. Recording occupies the session for the whole duration.")
     public String androidRecordScreen(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Recording duration in ms (1..180000)") final Integer durationMs,
@@ -695,7 +691,7 @@ public class AndroidMcpTools {
         + "screenshot for quantitative color checks (highlight colors, state-dependent tints). Coordinates are "
         + "DEVICE pixels — the same space as android_tap x,y and android_dump_ui bounds (NOT the downscaled "
         + "android_screenshot image). Returns JSON: per-point #RRGGBBAA for points='x1,y1;x2,y2;...' and/or "
-        + "the average #RRGGBB over rect='x,y,w,h'. Browser-side equivalent: browser_sample_pixels.")
+        + "the average #RRGGBB over rect='x,y,w,h'.")
     public String androidSamplePixels(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId,
         @McpToolParam(description = "Semicolon-separated device-pixel points 'x1,y1;x2,y2'. "
@@ -729,8 +725,7 @@ public class AndroidMcpTools {
 
     @McpTool(name = "android_close_session", description = "Close the Android session: restores the device's "
         + "original keyboard (if ADBKeyboard was activated) and releases the device binding. The sessionId "
-        + "itself stays valid for browser_* tools; call android_use_device again to resume "
-        + "Android testing.")
+        + "itself stays valid; call android_use_device again to resume Android testing.")
     public String androidCloseSession(
         @McpToolParam(description = SESSION_PARAM_DESC) final String sessionId
     ) {

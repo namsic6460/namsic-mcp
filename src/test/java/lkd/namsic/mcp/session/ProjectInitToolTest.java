@@ -1,6 +1,6 @@
 package lkd.namsic.mcp.session;
 
-import lkd.namsic.mcp.config.BrowserProperties;
+import lkd.namsic.mcp.config.SessionProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -20,9 +20,7 @@ class ProjectInitToolTest {
 
     @BeforeEach
     void setUp() {
-        BrowserProperties browserProps = new BrowserProperties(
-            null, null, null, null, null, null, null, null, null, this.tempScreenshotBase);
-        ProjectSessionRegistry registry = new ProjectSessionRegistry(browserProps);
+        ProjectSessionRegistry registry = new ProjectSessionRegistry(new SessionProperties(this.tempScreenshotBase));
         this.tool = new ProjectInitTool(registry);
     }
 

@@ -4,7 +4,7 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolResult;
 import io.modelcontextprotocol.spec.McpSchema.TextContent;
 import lkd.namsic.mcp.android.AndroidDeviceService.DeviceInfo;
 import lkd.namsic.mcp.config.AndroidProperties;
-import lkd.namsic.mcp.config.BrowserProperties;
+import lkd.namsic.mcp.config.SessionProperties;
 import lkd.namsic.mcp.session.ProjectSessionRegistry;
 import lkd.namsic.mcp.session.ProjectSessionRegistry.Project;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,10 +45,7 @@ class AndroidMcpToolsTest {
 
     @BeforeEach
     void setUp() {
-        BrowserProperties browserProps = new BrowserProperties(
-            "node", "chromium", List.of(), null, null, null, null, null, null, this.tempScreenshotBase
-        );
-        this.registry = new ProjectSessionRegistry(browserProps);
+        this.registry = new ProjectSessionRegistry(new SessionProperties(this.tempScreenshotBase));
         this.deviceService = mock(AndroidDeviceService.class);
         this.tools = new AndroidMcpTools(
             this.deviceService,
@@ -214,7 +211,7 @@ class AndroidMcpToolsTest {
         String result = this.tools.androidCloseSession(project.sessionId());
         assertTrue(result.startsWith("Android session closed"), result);
         assertTrue(this.tools.getSessions().isEmpty());
-        // sessionId는 browser_* 용으로 계속 유효해야 함
+        // sessionId는 registry에 남아 android_use_device 재바인딩에 계속 쓸 수 있어야 함
         assertDoesNotThrow(() -> this.registry.require(project.sessionId()));
     }
 
