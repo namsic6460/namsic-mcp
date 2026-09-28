@@ -49,6 +49,7 @@ $WVS = [System.Windows.Automation.WindowVisualState]
 # 구분자 변수를 $TAB 으로 두면 안 된다.
 $SEP = "`t"
 $STRIP_MAX_DEPTH = 8
+$TAB_ITEM_MAX_DEPTH = 8
 $CHROME_PROCESS = 'chrome'
 
 $script:processNameCache = @{}
@@ -85,13 +86,24 @@ function Get-ChromeWindows {
     return $windows
 }
 
+# 탭 스트립 = TabItem 을 품은 첫 번째 Tab 컨트롤.
+#   가로 탭: HorizontalTabStripRegionViewOld > TabStrip > Tab[TabContainerImpl] > TabItem
+#   세로 탭: Tab[VerticalTabStripRegionView] > TabStripView > ScrollView > Viewport
+#            > (Pinned|Unpinned)TabContainerView > [TabGroupView >] TabItem[TabView]
+# 두 영역은 모드와 무관하게 항상 트리에 함께 존재하고 비활성 쪽은 탭 없이 비어 있으므로,
+# 첫 Tab 컨트롤을 그대로 쓰면 안 되고 실제 탭이 들어 있는지 확인해야 한다.
+# 웹 콘텐츠(Document)의 ARIA 탭을 잘못 잡지 않도록 Document 하위로는 내려가지 않는다.
 function Find-TabStrip($element, $depth) {
     if ($depth -le 0) { return $null }
     $child = $TW.GetFirstChild($element)
     while ($null -ne $child) {
-        if ($child.Current.ControlType -eq $CT::Tab) { return $child }
-        $found = Find-TabStrip $child ($depth - 1)
-        if ($null -ne $found) { return $found }
+        $type = $child.Current.ControlType
+        if ($type -eq $CT::Tab) {
+            if (@(Get-TabItems $child).Count -gt 0) { return $child }
+        } elseif ($type -ne $CT::Document) {
+            $found = Find-TabStrip $child ($depth - 1)
+            if ($null -ne $found) { return $found }
+        }
         $child = $TW.GetNextSibling($child)
     }
     return $null
@@ -106,14 +118,23 @@ function Resolve-TabStrip($window) {
     return Find-TabStrip $window $STRIP_MAX_DEPTH
 }
 
+# 스트립 하위의 TabItem 을 트리 순서(= 화면 순서, 세로 탭은 고정 탭이 먼저)대로 모은다.
+# 세로 탭은 스크롤 뷰·탭 그룹 뷰 안에 중첩되어 있으므로 직계 자식만 봐서는 안 된다.
 function Get-TabItems($strip) {
-    $items = @()
-    $child = $TW.GetFirstChild($strip)
+    $items = New-Object System.Collections.ArrayList
+    Add-TabItems $strip $TAB_ITEM_MAX_DEPTH $items
+    return $items.ToArray()
+}
+
+function Add-TabItems($element, $depth, $items) {
+    if ($depth -le 0) { return }
+    $child = $TW.GetFirstChild($element)
     while ($null -ne $child) {
-        if ($child.Current.ControlType -eq $CT::TabItem) { $items += $child }
+        $type = $child.Current.ControlType
+        if ($type -eq $CT::TabItem) { [void]$items.Add($child) }
+        elseif ($type -ne $CT::Document) { Add-TabItems $child ($depth - 1) $items }
         $child = $TW.GetNextSibling($child)
     }
-    return $items
 }
 
 function Get-VisualState($window) {
