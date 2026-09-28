@@ -53,9 +53,14 @@ class McpToolRegistrationTest {
     void registersSessionAndChromeTools() {
         List<String> names = this.registeredToolNames();
 
-        assertTrue(names.contains("project_init"), () -> names.toString());
-        assertTrue(names.contains("chrome_list_tabs"), () -> names.toString());
-        assertTrue(names.contains("chrome_activate_tab"), () -> names.toString());
-        assertTrue(names.contains("android_use_device"), () -> names.toString());
+        assertTrue(names.contains("project_init"), names::toString);
+        assertTrue(names.contains("chrome_list_tabs"), names::toString);
+        assertTrue(names.contains("chrome_activate_tab"), names::toString);
+        assertTrue(names.contains("android_use_device"), names::toString);
+        for (String name : List.of("local_llm_status", "local_llm_vision", "local_llm_triage", "local_llm_result",
+            "local_llm_memory_save", "local_llm_memory_search", "local_llm_memory_get",
+            "local_llm_memory_delete", "local_llm_memory_context")) {
+            assertTrue(names.contains(name), names::toString);
+        }
     }
 }

@@ -69,4 +69,6 @@ tasks.named('test') {
     // ChromeUiaHostIntegrationTest는 실제 실행 중인 크롬이 필요해 기본 비활성이다.
     // 실행: ./gradlew test -PchromeUiaIt=true --tests '*ChromeUiaHostIntegrationTest*'
     systemProperty 'chrome.uia.it', findProperty('chromeUiaIt') ?: 'false'
+    systemProperty 'local.llm.it', findProperty('localLlmIt') ?: 'false'
+    systemProperty 'local.llm.image', findProperty('localLlmImage') ?: ''
 }
