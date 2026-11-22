@@ -208,4 +208,158 @@ class ChromeMcpToolsTest {
         assertTrue(result.startsWith("Error activating Chrome tab: Failed to start PowerShell"), result);
         assertFalse(result.contains("Activated"), result);
     }
+
+    // ===== 다이얼로그 =====
+
+    private static final List<String> CONFIRM_DIALOG = List.of(
+        "D\t655724\t0\texample.com 내용:",
+        "X\t655724\t0\t정말 창을 닫으시겠습니까?",
+        "B\t655724\t0\t0\t1\t확인",
+        "B\t655724\t0\t1\t1\t취소"
+    );
+
+    private static final List<String> TWO_DIALOGS = List.of(
+        "D\t1\t0\tfirst",
+        "B\t1\t0\t0\t1\tOK",
+        "D\t2\t0\tsecond",
+        "B\t2\t0\t0\t1\tLeave",
+        "B\t2\t0\t1\t1\tCancel"
+    );
+
+    @Test
+    void dialogToolsRequireKnownSession() {
+        String listed = this.tools.chromeListDialogs(UNKNOWN_SID);
+        String dismissed = this.tools.chromeDismissDialog(UNKNOWN_SID, "accept", null, null, null);
+
+        assertTrue(listed.startsWith("Error: Unknown sessionId"), listed);
+        assertTrue(dismissed.startsWith("Error: Unknown sessionId"), dismissed);
+        verify(this.host, never()).listDialogs();
+    }
+
+    @Test
+    void listDialogsRendersHostOutput() {
+        when(this.host.listDialogs()).thenReturn(CONFIRM_DIALOG);
+
+        String result = this.tools.chromeListDialogs(this.sessionId);
+
+        assertTrue(result.contains("Chrome dialogs (1):"), result);
+        assertTrue(result.contains("buttons: [확인] [취소]"), result);
+    }
+
+    @Test
+    void listDialogsReportsHostFailure() {
+        when(this.host.listDialogs()).thenThrow(new IllegalStateException("Chrome UIA host timed out"));
+
+        String result = this.tools.chromeListDialogs(this.sessionId);
+
+        assertTrue(result.startsWith("Error listing Chrome dialogs: "), result);
+    }
+
+    @Test
+    void acceptPressesFirstButtonOfTheOnlyDialog() {
+        when(this.host.listDialogs()).thenReturn(CONFIRM_DIALOG);
+        when(this.host.clickDialogButton(655724L, 0, 0)).thenReturn(List.of("OK\t확인"));
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, "Accept", null, null, null);
+
+        assertTrue(result.startsWith("Pressed '확인' on dialog \"example.com 내용:\""), result);
+        assertTrue(result.contains("정말 창을 닫으시겠습니까?"), result);
+        verify(this.host).clickDialogButton(655724L, 0, 0);
+    }
+
+    @Test
+    void cancelPressesLastButton() {
+        when(this.host.listDialogs()).thenReturn(CONFIRM_DIALOG);
+        when(this.host.clickDialogButton(655724L, 0, 1)).thenReturn(List.of("OK\t취소"));
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, "cancel", null, null, null);
+
+        assertTrue(result.startsWith("Pressed '취소'"), result);
+    }
+
+    @Test
+    void buttonNameOverridesAction() {
+        when(this.host.listDialogs()).thenReturn(CONFIRM_DIALOG);
+        when(this.host.clickDialogButton(655724L, 0, 1)).thenReturn(List.of("OK\t취소"));
+
+        this.tools.chromeDismissDialog(this.sessionId, "accept", "취소", null, null);
+
+        verify(this.host).clickDialogButton(655724L, 0, 1);
+    }
+
+    @Test
+    void unknownButtonNameListsTheDialogWithoutPressing() {
+        when(this.host.listDialogs()).thenReturn(CONFIRM_DIALOG);
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, null, "Leave", null, null);
+
+        assertTrue(result.startsWith("No button matches \"Leave\""), result);
+        assertTrue(result.contains("[확인] [취소]"), result);
+        verify(this.host, never()).clickDialogButton(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void dismissRequiresActionOrButton() {
+        String missing = this.tools.chromeDismissDialog(this.sessionId, null, " ", null, null);
+        String invalid = this.tools.chromeDismissDialog(this.sessionId, "yes", null, null, null);
+
+        assertTrue(missing.startsWith("Error: specify action"), missing);
+        assertTrue(invalid.startsWith("Error: specify action"), invalid);
+        verify(this.host, never()).listDialogs();
+    }
+
+    @Test
+    void dismissWithNoDialogExplainsBackgroundTabs() {
+        when(this.host.listDialogs()).thenReturn(List.of());
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, "accept", null, null, null);
+
+        assertTrue(result.startsWith("No Chrome dialog is open."), result);
+        assertTrue(result.contains("chrome_activate_tab"), result);
+        verify(this.host, never()).clickDialogButton(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void severalDialogsNeedAnAddress() {
+        when(this.host.listDialogs()).thenReturn(TWO_DIALOGS);
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, "accept", null, null, null);
+
+        assertTrue(result.startsWith("2 dialogs are open."), result);
+        verify(this.host, never()).clickDialogButton(anyLong(), anyInt(), anyInt());
+    }
+
+    @Test
+    void addressPicksOneOfSeveralDialogs() {
+        when(this.host.listDialogs()).thenReturn(TWO_DIALOGS);
+        when(this.host.clickDialogButton(2L, 0, 1)).thenReturn(List.of("OK\tCancel"));
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, "cancel", null, 2L, 0);
+
+        assertTrue(result.startsWith("Pressed 'Cancel' on dialog \"second\""), result);
+    }
+
+    @Test
+    void unknownAddressListsOpenDialogs() {
+        when(this.host.listDialogs()).thenReturn(TWO_DIALOGS);
+
+        String result = this.tools.chromeDismissDialog(this.sessionId, "accept", null, 9L, 0);
+
+        assertTrue(result.startsWith("No Chrome dialog at hwnd=9 dialogIndex=0."), result);
+        assertTrue(result.contains("Chrome dialogs (2):"), result);
+    }
+
+    @Test
+    void dismissSurfacesHostErrorRecordAndException() {
+        when(this.host.listDialogs()).thenReturn(CONFIRM_DIALOG);
+        when(this.host.clickDialogButton(655724L, 0, 0))
+            .thenReturn(List.of("ERR\tdialog index 0 out of range (window has 0 dialogs)"))
+            .thenThrow(new IllegalStateException("Chrome UIA host timed out"));
+
+        String errorRecord = this.tools.chromeDismissDialog(this.sessionId, "accept", null, null, null);
+        String exception = this.tools.chromeDismissDialog(this.sessionId, "accept", null, null, null);
+
+        assertTrue(errorRecord.startsWith("Error dismissing Chrome dialog: dialog index 0 out of range"), errorRecord);
+        assertTrue(exception.startsWith("Error dismissing Chrome dialog: Chrome UIA host timed out"), exception);
+    }
 }

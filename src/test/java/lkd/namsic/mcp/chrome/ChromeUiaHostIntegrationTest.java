@@ -114,6 +114,26 @@ class ChromeUiaHostIntegrationTest {
         }
     }
 
+    /** 다이얼로그가 없는 평소 상태에서 DIALOGS 가 버블·정보 표시줄을 다이얼로그로 오인하지 않는지 본다. */
+    @Test
+    void listsNoDialogsWhenNoneIsOpenAndRejectsUnknownDialog() {
+        ChromeUiaHost host = newHost();
+        try {
+            ChromeDialogIndex index = ChromeDialogIndex.parse(host.listDialogs());
+            assertTrue(index.errors().isEmpty(), () -> "host errors: " + index.errors());
+            assumeTrue(index.dialogs().isEmpty(), "a Chrome dialog is open — close it to run this test");
+
+            ChromeTabIndex tabs = ChromeTabIndex.parse(host.listTabs());
+            assertFalse(tabs.windows().isEmpty(), "Chrome must be running for this test");
+            List<String> reply = host.clickDialogButton(tabs.windows().getFirst().hwnd(), 0, 0);
+
+            assertTrue(reply.stream().anyMatch(line -> line.startsWith("ERR\tdialog index 0 out of range")),
+                () -> "expected an ERR record but got " + reply);
+        } finally {
+            host.close();
+        }
+    }
+
     @Test
     void reportsErrorForUnknownWindowHandle() {
         ChromeUiaHost host = newHost();

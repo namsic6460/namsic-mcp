@@ -70,6 +70,16 @@ public class ChromeUiaHost {
         return this.command("ACTIVATE\t" + hwnd + '\t' + tabIndex + '\t' + (bringToFront ? '1' : '0'));
     }
 
+    /** 크롬 창에 떠 있는 네이티브 다이얼로그(alert/confirm/prompt/beforeunload 등)의 D·X·B 레코드. */
+    public List<String> listDialogs() {
+        return this.command("DIALOGS");
+    }
+
+    /** 지정 창의 dialogIndex 번째 다이얼로그에서 buttonIndex 번째 버튼을 누른다. */
+    public List<String> clickDialogButton(final long hwnd, final int dialogIndex, final int buttonIndex) {
+        return this.command("DIALOG_CLICK\t" + hwnd + '\t' + dialogIndex + '\t' + buttonIndex);
+    }
+
     private List<String> command(final String line) {
         // 콜드 스타트면 Add-Type 컴파일 시간까지 기다려 줘야 첫 호출이 타임아웃으로 죽지 않는다.
         final long awaitMs = this.properties.commandTimeout().toMillis()
