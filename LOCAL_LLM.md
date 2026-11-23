@@ -27,25 +27,22 @@ Qwen/llama.cpp의 OpenAI 호환 API를 MCP에서 호출한다. OpenCode나 셸 �
 
 ## 설정
 
-Spring ConfigurationProperties `app.local-llm` 사용. Vault의 같은 키 또는 환경 변수로 재정의한다.
+PC마다 달라질 수 있는 값만 환경 변수(또는 저장소 루트 `.env`)로 바꾼다. 나머지는 코드 상수(`src/config.rs`)다.
 
-| 설정 | 기본값 |
-|---|---|
-| base-url | http://127.0.0.1:9000 |
-| model | qwen3.8-27b |
-| request-timeout | 3m (실제 HTTP 추론 시간, 대기 시간 제외) |
-| queue-capacity | 8 |
-| max-retained-jobs | 100 |
-| retention | 30m (완료 후) |
-| image-roots | 빈 목록 |
+| 설정 | 기본값 | 변경 방법 |
+|---|---|---|
+| base-url | http://127.0.0.1:9000 | `LOCAL_LLM_BASE_URL` |
+| model | qwen3.8-27b | `LOCAL_LLM_MODEL` |
+| image-roots | 빈 목록 | `LOCAL_LLM_IMAGE_ROOTS` (`;` 구분) |
+| request-timeout | 3m (실제 HTTP 추론 시간, 대기 시간 제외) | 상수 |
+| queue-capacity | 8 | 상수 |
+| max-retained-jobs | 100 | 상수 |
+| retention | 30m (완료 후) | 상수 |
 
-예를 들어 기존 체크리스트 캡처를 읽으려면 서버 설정에 아래처럼 허용 루트를 추가한다:
+예를 들어 기존 체크리스트 캡처를 읽으려면 `.env`에 아래처럼 허용 루트를 추가한다:
 
-```yaml
-app:
-  local-llm:
-    image-roots:
-      - C:/Users/user/Desktop/projects/dream-maker/checklist
+```dotenv
+LOCAL_LLM_IMAGE_ROOTS=C:/Users/user/Desktop/projects/dream-maker/checklist
 ```
 
 설정 변경 후 서버를 재시작한다. Claude/Codex에서는 추가된 MCP 도구 목록을 새로 불러온다.
@@ -68,15 +65,14 @@ app:
 
 ## 검증
 
-`./gradlew test`: 가짜 로컬 HTTP 서버로 요청 형식, 대기열 포화/직렬화, 세션 분리,
+`cargo test`: 가짜 로컬 HTTP 서버로 요청 형식, 대기열 포화/직렬화, 세션 분리,
 허용 경로, 이미지 형식, 응답 검증, 제한시간 및 도구 중복 등록을 검사한다.
 
 실제 Qwen 시험(기본 테스트에서는 제외):
 
 ```powershell
-./gradlew.bat test -PlocalLlmIt=true --tests '*LocalLlmServiceTest.liveLocalQwenRoundTrip'
-# 실제 기존 이미지 사용 시:
-# -PlocalLlmImage=C:/absolute/path/to/shot.png
+cargo test -- --ignored live_local_qwen_round_trip
+# 실제 기존 이미지 사용 시: $env:LOCAL_LLM_IMAGE='C:/absolute/path/to/shot.png'
 ```
 
 ## LLM 메모리 관리
@@ -108,7 +104,7 @@ MCP 전용 저장소이며 Codex/Claude 개인 메모리와 분리된다. Qwen �
 주입 문맥은 16,000자를 넘으면 실패하며 내용을 조용히 자르지 않는다.
 기존 `referenceMemory` 직접 입력도 유지되므로 후보 배제는 context 도구의 보장 범위다.
 
-저장 위치: `app.local-llm.memory.directory` (기본 `~/.namsic-mcp/llm-memory`).
+저장 위치: `~/.namsic-mcp/llm-memory` (상수, Java 판과 같은 파일 형식).
 프로젝트의 정규화된 이름을 키로 사용하므로 재시작 후 같은 이름으로 project_init을 호출하면 재사용한다.
 같은 정규화 이름은 같은 저장소를 공유한다. sessionId는 사용자 인증 경계가 아니다.
 임의 메모리 파일 경로를 도구 인자로 받지 않으며 파일 이름은 프로젝트 이름의 SHA-256이다.
